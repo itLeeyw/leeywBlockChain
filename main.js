@@ -5,23 +5,47 @@ class Block {
   constructor(data, prevHash) {
     this.data = data;
     this.prevHash = prevHash;
-    this.hash = Block.genHash({data: this.data, prevHash: this.prevHash});
+    this.nonce = 1;
   }
   // hash模块
   static genHash(block) {
-    return sha256(block.data + block.prevHash).toString();
+    return sha256(block.data + block.prevHash + block.nonce).toString();
   }
+
+  getAnswer(difficulty) {
+    // 开头前 n 位为 0 的 hash
+    const ans = ''.padStart(difficulty, '0');
+    return ans;
+  }
+
+  // 计算符合区块链难度要求的 hash
+  // proof of work
+  mine(difficulty) {
+    while(true) {
+      this.hash = Block.genHash({data: this.data, prevHash: this.prevHash, nonce: this.nonce});
+      if(!this.hash.startsWith(this.getAnswer(difficulty))) {
+        this.hash = Block.genHash({data: this.data, prevHash: this.prevHash, nonce: this.nonce++});
+      } else {
+        break;
+      }
+    }
+    console.log('mine done!', this.hash)
+  }
+  
 }
 
 // 链
 class Chain {
   constructor() {
+    this.difficulty = 3;
     this.chain = [this.bigBang()];
   }
 
   // 祖先区块儿的生成
   bigBang() {
-    return new Block('祖先区块', null);
+    const ancestryBlock = new Block('祖先区块', null);
+    ancestryBlock.hash = Block.genHash(ancestryBlock);
+    return ancestryBlock;
   }
 
   // 尾插法
@@ -32,6 +56,7 @@ class Chain {
   // 添加区块到尾部
   addBlock2Chain(block) {
     block.prevHash = this.getLastBlock().hash;
+    block.mine(this.difficulty);
     this.chain.push(block);
   }
 
@@ -70,6 +95,12 @@ class Chain {
 
 const leeywBlockChain = new Chain();
 const block1 = new Block('send 1 leeywCoin', null);
+const block2 = new Block('send 1 leeywCoin', null);
+const block3 = new Block('send 1 leeywCoin', null);
 leeywBlockChain.addBlock2Chain(block1);
-block1.data = 'send 2 leeywCoin';
-console.log(leeywBlockChain.validateChain());
+leeywBlockChain.addBlock2Chain(block2);
+leeywBlockChain.addBlock2Chain(block3);
+// block1.data = 'send 23 leeywCoin';
+// block1.mine(3)
+// console.log(leeywBlockChain);
+// console.log(leeywBlockChain.validateChain());
