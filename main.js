@@ -1,15 +1,30 @@
 const sha256 = require('crypto-js/sha256');
 
+class Transaction {
+  constructor(from, to, amount) {
+    this.from = from;
+    this.to = to;
+    this.amount = amount;
+  }
+}
+
 // 块
 class Block {
-  constructor(data, prevHash) {
-    this.data = data;
+  // transactions <-> array of objects
+  constructor(transactions, prevHash) {
+    this.transactions = transactions;
     this.prevHash = prevHash;
     this.nonce = 1;
+    this.timestamp = Date.now();
+    this.hash = Block.genHash(
+      {transactions: this.transactions, prevHash: this.prevHash, nonce: this.nonce, timestamp: this.timestamp}
+    );
   }
   // hash模块
   static genHash(block) {
-    return sha256(block.data + block.prevHash + block.nonce).toString();
+    return sha256(
+      JSON.stringify(block.transactions) + block.prevHash + block.nonce + block.timestamp
+    ).toString();
   }
 
   getAnswer(difficulty) {
@@ -22,9 +37,9 @@ class Block {
   // proof of work
   mine(difficulty) {
     while(true) {
-      this.hash = Block.genHash({data: this.data, prevHash: this.prevHash, nonce: this.nonce});
       if(!this.hash.startsWith(this.getAnswer(difficulty))) {
-        this.hash = Block.genHash({data: this.data, prevHash: this.prevHash, nonce: this.nonce++});
+        this.timestamp = Date.now();
+        this.hash = Block.genHash({transactions: this.transactions, prevHash: this.prevHash, nonce: this.nonce++, timestamp: this.timestamp});
       } else {
         break;
       }
@@ -39,6 +54,8 @@ class Chain {
   constructor() {
     this.difficulty = 3;
     this.chain = [this.bigBang()];
+    this.transactionsPool = [];
+    this.minerReward = 50;
   }
 
   // 祖先区块儿的生成
@@ -58,6 +75,28 @@ class Chain {
     block.prevHash = this.getLastBlock().hash;
     block.mine(this.difficulty);
     this.chain.push(block);
+  }
+
+  // 添加 transaction 到 transactionPoll 里
+  addTransaction2Poll(transaction) {
+    this.transactionsPool.push(transaction);
+  }
+
+  mineTransactionPool(mineRewardAddress) {
+    // 发放矿工奖励
+    const minerRewardTransaction = new Transaction(
+      '',
+      mineRewardAddress,
+      this.minerReward
+    );
+    this.transactionsPool.push(minerRewardTransaction);
+    // 挖矿
+    const newBlock = new Block(this.transactionsPool, this.getLastBlock().hash);
+    newBlock.mine(this.difficulty);
+    // 添加区块到链
+    // 清空 transactionPool
+    this.chain.push(newBlock);
+    this.transactionsPool = [];
   }
 
   // 验证区块是否合法
@@ -93,14 +132,11 @@ class Chain {
   }
 }
 
-const leeywBlockChain = new Chain();
-const block1 = new Block('send 1 leeywCoin', null);
-const block2 = new Block('send 1 leeywCoin', null);
-const block3 = new Block('send 1 leeywCoin', null);
-leeywBlockChain.addBlock2Chain(block1);
-leeywBlockChain.addBlock2Chain(block2);
-leeywBlockChain.addBlock2Chain(block3);
-// block1.data = 'send 23 leeywCoin';
-// block1.mine(3)
-// console.log(leeywBlockChain);
-// console.log(leeywBlockChain.validateChain());
+const leeywCoin = new Chain();
+const t1 = new Transaction('addr1', 'addr2', 10);
+const t2 = new Transaction('addr2', 'addr1', 5);
+leeywCoin.addTransaction2Poll(t1);
+leeywCoin.addTransaction2Poll(t2);
+leeywCoin.mineTransactionPool('addr3');
+console.log(leeywCoin);
+console.log(leeywCoin.chain[1].transactions);
