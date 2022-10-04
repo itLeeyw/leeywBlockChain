@@ -1,10 +1,28 @@
 const sha256 = require('crypto-js/sha256');
+const ecLib = require('elliptic').ec;
+const ec = new ecLib('secp256k1'); // curve name
 
 class Transaction {
   constructor(from, to, amount) {
     this.from = from;
     this.to = to;
     this.amount = amount;
+  }
+  
+  genHash() {
+    return sha256(
+      this.from + this.to + this.amount
+    ).toString();
+  }
+
+  sign(key) {
+    this.signature = key.sign(this.genHash(), 'base64').toDER('hex');
+  }
+
+  isValid() {
+    if (this.from === '') return true;
+    const keyObj = ec.keyFromPublic(this.from, 'hex');
+    return keyObj.verify(this.genHash(), this.signature);
   }
 }
 
@@ -36,6 +54,7 @@ class Block {
   // 计算符合区块链难度要求的 hash
   // proof of work
   mine(difficulty) {
+    this.validateBlockTransactions();
     while(true) {
       if(!this.hash.startsWith(this.getAnswer(difficulty))) {
         this.timestamp = Date.now();
@@ -47,6 +66,15 @@ class Block {
     console.log('mine done!', this.hash)
   }
   
+  validateBlockTransactions() {
+    for (let transaction of this.transactions) {
+      if (!transaction.isValid()) {
+        console.error('Transaction is tampered with.');
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 // 链
@@ -79,6 +107,9 @@ class Chain {
 
   // 添加 transaction 到 transactionPoll 里
   addTransaction2Poll(transaction) {
+    if (!transaction.isValid()) {
+      throw new Error('Transaction is tampered with.');
+    }
     this.transactionsPool.push(transaction);
   }
 
@@ -118,6 +149,10 @@ class Chain {
     }
     for (let i = 1, blockLen = this.chain.length; i < blockLen; i++) {
       const currBlock = this.chain[i];
+      if (!currBlock.validateBlockTransactions()) {
+        console.error('Transaction is tampered with.');
+        return false;
+      }
       if (!this.validateBlock(currBlock)) {
         console.error(currBlock, '数据被篡改');
         return false;
@@ -133,10 +168,23 @@ class Chain {
 }
 
 const leeywCoin = new Chain();
-const t1 = new Transaction('addr1', 'addr2', 10);
-const t2 = new Transaction('addr2', 'addr1', 5);
+
+const keyPairSender = ec.genKeyPair();
+const privateKeySender = keyPairSender.getPrivate('hex');
+const publicKeySender = keyPairSender.getPublic('hex');
+
+const keyPairReceiver = ec.genKeyPair();
+const privateKeyReceiver = keyPairReceiver.getPrivate('hex');
+const publicKeyReceiver = keyPairReceiver.getPublic('hex');
+
+const t1 = new Transaction(publicKeySender, publicKeyReceiver, 10);
+t1.sign(keyPairSender)
+
+
+console.log(t1)
+console.log(t1.isValid())
 leeywCoin.addTransaction2Poll(t1);
-leeywCoin.addTransaction2Poll(t2);
-leeywCoin.mineTransactionPool('addr3');
-console.log(leeywCoin);
-console.log(leeywCoin.chain[1].transactions);
+leeywCoin.mineTransactionPool(publicKeyReceiver);
+console.log(leeywCoin)
+console.log(leeywCoin.chain[1].transactions)
+
